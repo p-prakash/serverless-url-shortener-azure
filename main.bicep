@@ -27,7 +27,7 @@ param shortUrl string
 
 // Create the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
-  name: 'url-shortener-auto7'
+  name: 'url-shortener-rg'
   location: location
   tags: {
     Reason: 'url-shortener-${toLower(Environ)}'
