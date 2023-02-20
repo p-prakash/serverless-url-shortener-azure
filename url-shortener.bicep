@@ -38,7 +38,7 @@ resource dbAccount 'Microsoft.DocumentDB/databaseAccounts@2022-08-15' = {
     locations: [
       {
         locationName: location
-        isZoneRedundant: false
+        isZoneRedundant: true
       }
     ]
     databaseAccountOfferType: 'Standard'
