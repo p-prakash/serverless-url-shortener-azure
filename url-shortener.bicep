@@ -575,39 +575,6 @@ resource URLShortenerFunctionApp 'Microsoft.Web/sites@2022-03-01' = {
   }
 }
 
-// Create Function
-resource URLShortenerFunction 'Microsoft.Web/sites/functions@2022-03-01' = {
-  name: 'shorten-url'
-  parent: URLShortenerFunctionApp
-  properties: {
-    config: {
-      disabled: false
-      bindings: [
-        {
-          name: 'req'
-          authLevel: 'function'
-          type: 'httpTrigger'
-          direction: 'in'
-          route: 'api/shorten-url'
-          methods: [
-            'post'
-          ]
-        }
-        {
-          name: '$return'
-          type: 'http'
-          direction: 'out'
-        }
-      ]
-    }
-    files: {
-      '__init__.py': 'print("Creating function")\n'
-    }
-    isDisabled: false
-    language: 'python'
-  }
-}
-
 var roleAssignmentId = guid('sql-role-assignment', resourceGroup().id, dbAccount.id)
 
 // Create Cosmos DB Role Assignment for Function App
@@ -857,7 +824,7 @@ resource URLShortenerApiGetListURLsPolicy 'Microsoft.ApiManagement/service/apis/
   parent: URLShortenerApiGetListURLs
   name: 'policy'
   properties: {
-    value: '<policies>\r\n    <inbound>\r\n        <base />\r\n        <cors allow-credentials="true">\r\n            <allowed-origins>\r\n                <origin>https://${URLShortenerCdnEndpoint.properties.hostName}</origin>\r\n                <origin>${URLShortenerApiMgmt.properties.gatewayUrl}</origin>\r\n                            <origin>${shortUrl}</origin>\r\n            </allowed-origins>\r\n            <allowed-methods preflight-result-max-age="120">\r\n                <method>GET</method>\r\n                <method>OPTIONS</method>\r\n            </allowed-methods>\r\n            <allowed-headers>\r\n                <header>*</header>\r\n            </allowed-headers>\r\n            <expose-headers>\r\n                <header>*</header>\r\n            </expose-headers>\r\n        </cors>\r\n        <check-header name="X-Azure-FDID" failed-check-httpcode="403" failed-check-error-message="Not Authorized" ignore-case="true">\r\n            <value>${URLShortenerCdnProfile.properties.frontDoorId}</value>\r\n        </check-header>\r\n        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid." require-expiration-time="true" require-scheme="Bearer" require-signed-tokens="true" clock-skew="300" output-token-variable-name="jwt-token">\r\n            <openid-config url="https://${aadB2cOrg}.b2clogin.com/${aadB2cOrg}.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=${aadB2cUserFlow}" />\r\n            <required-claims>\r\n                <claim name="aud">\r\n                    <value>${aadB2cApiClientId}</value>\r\n                </claim>\r\n            </required-claims>\r\n        </validate-jwt>\r\n        <set-variable name="userID" value="@{\r\n            var authHeader = context.Request.Headers.GetValueOrDefault("Authorization", "");\r\n            return (string)authHeader.AsJwt()?.Claims.GetValueOrDefault("oid", "DOESNOT_EXIST");\r\n        }" />\r\n        <set-backend-service base-url="https://${dbAccount.name}.documents.azure.com" />\r\n        <set-variable name="requestDateString" value="@(DateTime.UtcNow.ToString("r"))" />\r\n        <authentication-managed-identity resource="https://${dbAccount.name}.documents.azure.com" output-token-variable-name="msi-access-token" ignore-error="false" />\r\n        <set-header name="Authorization" exists-action="override">\r\n            <value>@("type=aad&ver=1.0&sig=" + context.Variables["msi-access-token"])</value>\r\n        </set-header>\r\n        <set-header name="x-ms-date" exists-action="override">\r\n            <value>@(context.Variables.GetValueOrDefault<string>("requestDateString"))</value>\r\n        </set-header>\r\n        <set-header name="x-ms-version" exists-action="override">\r\n            <value>2018-12-31</value>\r\n        </set-header>\r\n        <set-header name="x-ms-documentdb-isquery" exists-action="override">\r\n            <value>True</value>\r\n        </set-header>\r\n        <set-header name="x-ms-documentdb-query-enablecrosspartition" exists-action="override">\r\n            <value>True</value>\r\n        </set-header>\r\n        <set-header name="Content-Type" exists-action="override">\r\n            <value>application/query+json</value>\r\n        </set-header>\r\n        <set-method>POST</set-method>\r\n        <set-body template="liquid">\r\n        {  \r\n            "query": "SELECT c.id, c.target_url FROM c WHERE (c.oid = \'{{context.Variables["userID"]}}\')",  \r\n            "parameters": []  \r\n        }\r\n        </set-body>\r\n        <rewrite-uri template="/dbs/${database.name}/colls/${dbContainer.name}/docs/" copy-unmatched-params="false" />\r\n    </inbound>\r\n    <backend>\r\n        <base />\r\n    </backend>\r\n    <outbound>\r\n        <base />\r\n    </outbound>\r\n    <on-error>\r\n        <base />\r\n    </on-error>\r\n</policies>\r\n'
+    value: '<policies>\r\n    <inbound>\r\n        <base />\r\n        <cors allow-credentials="true">\r\n            <allowed-origins>\r\n                <origin>https://${URLShortenerCdnEndpoint.properties.hostName}</origin>\r\n                <origin>${URLShortenerApiMgmt.properties.gatewayUrl}</origin>\r\n                            <origin>${shortUrl}</origin>\r\n            </allowed-origins>\r\n            <allowed-methods preflight-result-max-age="120">\r\n                <method>GET</method>\r\n                <method>OPTIONS</method>\r\n            </allowed-methods>\r\n            <allowed-headers>\r\n                <header>*</header>\r\n            </allowed-headers>\r\n            <expose-headers>\r\n                <header>*</header>\r\n            </expose-headers>\r\n        </cors>\r\n        <check-header name="X-Azure-FDID" failed-check-httpcode="403" failed-check-error-message="Not Authorized" ignore-case="true">\r\n            <value>${URLShortenerCdnProfile.properties.frontDoorId}</value>\r\n        </check-header>\r\n        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid." require-expiration-time="true" require-scheme="Bearer" require-signed-tokens="true" clock-skew="300" output-token-variable-name="jwt-token">\r\n            <openid-config url="https://${aadB2cOrg}.b2clogin.com/${aadB2cOrg}.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=${aadB2cUserFlow}" />\r\n            <required-claims>\r\n                <claim name="aud">\r\n                    <value>${aadB2cApiClientId}</value>\r\n                </claim>\r\n            </required-claims>\r\n        </validate-jwt>\r\n        <set-variable name="userID" value="@{\r\n            var authHeader = context.Request.Headers.GetValueOrDefault("Authorization", "");\r\n            return (string)authHeader.AsJwt()?.Claims.GetValueOrDefault("oid", "DOESNOT_EXIST");\r\n        }" />\r\n        <set-header name="Content-Type" exists-action="override">\r\n            <value>application/json</value>\r\n        </set-header>\r\n        <set-method>POST</set-method>\r\n        <set-body template="liquid">{"oid": "{{context.Variables["userID"]}}"}</set-body>\r\n        <set-backend-service id="apim-generated-policy" backend-id="${apiBackend.name}" />\r\n        <rewrite-uri template="/api/list-urls" />\r\n    </inbound>\r\n    <backend>\r\n        <base />\r\n    </backend>\r\n    <outbound>\r\n        <base />\r\n    </outbound>\r\n    <on-error>\r\n        <base />\r\n    </on-error>\r\n</policies>\r\n'
     format: 'rawxml'
   }
 }

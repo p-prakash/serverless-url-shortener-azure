@@ -215,14 +215,13 @@
       }
       function getYourURLs() {
         document.getElementById("progress2").hidden = false;
-        document.getElementById("url-list").innerHTML = "Shortening URL... ";
+        document.getElementById("url-list").innerHTML = "Getting your URLs...";
         document.getElementById("cardheader").classList.remove("bg-success", "bg-warning", "bg-danger");
         myMSALObj
           .acquireTokenSilent({ scopes: config.api.scopes, account: getAccount() })
           .then((tokenResponse) => {
             const headers = new Headers();
             headers.append("Authorization", `Bearer ${tokenResponse.accessToken}`);
-            data = { url: orig_url };
             fetch(config.api.backend + "/list-urls", {
               method: "GET",
               headers: headers,
@@ -235,18 +234,27 @@
                   document.getElementById("cardheader").classList.add("bg-success");
                   let urls_list = JSON.parse(await response.text());
                   var table_construct = "<table><tr><th>Full URL</th><th>Short URL</th><th></th></tr>";
-                  for (var i = 0; i < urls_list["Documents"].length; i++) {
+                  var url_status = "";
+                  for (var i = 0; i < urls_list.length; i++) {
+                    if (urls_list[i]["status"] === 200) {
+                      url_status = "<img src='https://img.shields.io/badge/URL%20Status-Accessible-brightgreen' style='max-width: 100%;' />";
+                    }
+                    else {
+                      url_status = "<img src='https://img.shields.io/badge/URL%20Status-Broken-red' style='max-width: 100%;' />";
+                    }
                     table_construct +=
                       '<tr><td>' +
-                      urls_list["Documents"][i]["target_url"] +
+                      urls_list[i]["target_url"] +
+                      ' ' +
+                      url_status +
                       '</td><td>[SHORT_URL]' +
-                      urls_list["Documents"][i]["id"].trim() +
+                      urls_list[i]["id"].trim() +
                       '<div hidden id="replace-' +
                       i +
                       '">[SHORT_URL]<input type="text" id="replace-hash-'+
                       i +
                       '" name="replace_hash" placeholder="'+
-                      urls_list["Documents"][i]["id"].trim() +
+                      urls_list[i]["id"].trim() +
                       '" pattern="[A-Za-z0-9]{8}" minlength="8" maxlength="8" /><br/><button class="btn btn-warning" id="callapibtn-' +
                       i +
                       '" onClick="getAPIData(&quot;update-progress-' +
@@ -254,9 +262,9 @@
                       '&quot;, &quot;shorten-results-' +
                       i +
                       '&quot;, &quot;' +
-                      urls_list["Documents"][i]["target_url"] +
+                      urls_list[i]["target_url"] +
                       '&quot;,  &quot;' +
-                      urls_list["Documents"][i]["id"].trim() +
+                      urls_list[i]["id"].trim() +
                       '&quot;)">Update</button>&nbsp;<button class="btn btn-warning" id="cancelbtn-' +
                       i +
                       '" onClick="canceleditURL(&quot;replace-' +
@@ -272,7 +280,7 @@
                       '&quot;)">Edit</button>&nbsp;<button class="btn btn-warning" id="deleteUrlbtn-' +
                       i +
                       '" onClick="deleteURL(&quot;' +
-                      urls_list["Documents"][i]["id"].trim() +
+                      urls_list[i]["id"].trim() +
                       '&quot;, &quot;delete-status-' +
                       i +
                       '&quot;)">Delete</button><br/><div hidden id="delete-status-' +
