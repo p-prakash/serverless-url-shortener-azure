@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-BmbxuPwQa2lc/FVzBcNJ7UAyJxM6wuqIj61tLrc4wSX0szH/Ev+nYRRuWlolflfl" crossorigin="anonymous">
+    <style>
+      table {
+      font-family: arial, sans-serif;
+      border-collapse: collapse;
+      width: 100%;
+      }
+      
+      td, th {
+      border: 1px solid #bebff8;
+      text-align: left;
+      padding: 8px;
+      }
+      
+      tr:nth-child(odd) {
+      background-color: #b5cbd8
+      }
+
+      tr:nth-child(even) {
+      background-color: #a1c2d4
+      }
+
+      button { 
+        margin: 2px;
+      }
+
+      input[type="text"] {
+        width: 250px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-md-12">
+          <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <div class="container-fluid">
+              <a class="navbar-brand" href="#">Azure Serverless URL Shortener</a>
+            </div>
+          </nav>
+        </div>
+      </div>
+      <div class="row">
+        <div class="col-md-12">
+          <div class="card">
+            <div id="cardheader" class="card-header">
+              <div class="card-text"id="message">Track the link redirect</div>
+            </div>
+            <div class="card-body">
+              <div id="link-checker">
+                Enter the short URL that needs to be checked 
+                <input type="text" id="short_url" name="short_url" pattern="[URL_PATTERN]" minlength="31" maxlength="31" required /> 
+                <button class="btn btn-warning" id="callapibtn" onClick="getURLData('progress', 'redirect-results')">Check It</a>
+                  <div id="progress" class="spinner-border" role="status">
+                    <span class="visually-hidden">Checking...</span>
+                  </div>
+                </button>
+                <div id="redirect-results"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script lang="javascript">
+      document.getElementById("progress").hidden = true;
+      function getURLData(pelemId, suelemId) {
+        var origUrl = document.getElementById("short_url").value;
+        var re = /^[URL_PATTERN]/;
+        if (! re.test(origUrl)) {
+            alert("Enter a valid short URL");
+            return false;
+        }
+        document.getElementById(pelemId).hidden = false;
+        document.getElementById(suelemId).innerHTML = "Getting URL Redirect ... ";
+        document.getElementById("cardheader").classList.remove("bg-success", "bg-warning", "bg-danger");
+        fetch( origUrl, {
+            method: "HEAD",
+        })
+        .then(async (response) => {
+            if (response.ok) {
+                var redirectUrl = response.headers.get('Location');
+                document.getElementById("cardheader").classList.add("text-white");
+                document.getElementById("cardheader").classList.add("bg-success");
+                document.getElementById(suelemId).innerHTML = "Short URL: " + origUrl + "<br/>Target URL: <b>" + redirectUrl + "</b><br/>";
+            } else {
+                document.getElementById("cardheader").classList.add("text-white");
+                document.getElementById("cardheader").classList.add("bg-warning");
+                document.getElementById(suelemId).innerHTML = "Either the URL is not available or some error happened";
+            }
+        })
+        .catch(async (error) => {
+            document.getElementById("cardheader").classList.add("text-white");
+            document.getElementById("cardheader").classList.add("bg-danger");
+            document.getElementById(suelemId).innerHTML = "Error: " + error;
+        });
+        document.getElementById(pelemId).hidden = true;
+        document.getElementById("short_url").value = "";
+      }
+    </script>
+  </body>
+</html>

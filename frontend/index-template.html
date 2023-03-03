@@ -40,7 +40,10 @@
             <div class="container-fluid">
               <a class="navbar-brand" href="#">Azure Serverless URL Shortener</a>
               <div class="navbar-nav">
-                <button class="btn btn-success" id="signinbtn" onClick="login()">Sign In</a>
+                <button class="btn btn-success" id="signinbtn" onClick="login()">Sign In</button>
+                <a href="https://[B2C_ORG].b2clogin.com/[B2C_ORG].onmicrosoft.com/[B2C_USER_FLOW]/oauth2/v2.0/logout?post_logout_redirect_uri=[ENCODED_URL]">
+                  <button class="btn btn-danger" id="signoutbtn">Sign Out</button>
+                </a> 
               </div>
             </div>
           </nav>
@@ -79,7 +82,10 @@
                   <span class="visually-hidden">Loading...</span>
                 </div>
               </button>
-              <br/>
+              <input type="checkbox" id="check-links" name="check-links" value="Yes">
+                <a>Check whether the links are accessible <em>[Note: It might take long time]</em></a>
+              </input>
+              <br/><br/>
               <div id="url-list"></div>
             </div>
           </div>
@@ -110,14 +116,18 @@
       document.getElementById("progress").hidden = true;
       document.getElementById("listUrlbtn").hidden = true;
       document.getElementById("progress2").hidden = true;
+      document.getElementById("signoutbtn").hidden = true;
+      document.getElementById("check-links").hidden = true;
       const myMSALObj = new msal.PublicClientApplication(config.msal);
       myMSALObj.handleRedirectPromise().then((tokenResponse) => {
           if (tokenResponse !== null) {
             document.getElementById("message").innerHTML = "Welcome, " + tokenResponse.account.idTokenClaims.given_name;
             document.getElementById("signinbtn").hidden = true;
+            document.getElementById("signoutbtn").hidden = false;
             document.getElementById("shorten-url-1").hidden = false;
             document.getElementById("callapibtn").hidden = false;
             document.getElementById("listUrlbtn").hidden = false;
+            document.getElementById("check-links").hidden = false;
           }
         })
         .catch((error) => {
@@ -220,9 +230,17 @@
         myMSALObj
           .acquireTokenSilent({ scopes: config.api.scopes, account: getAccount() })
           .then((tokenResponse) => {
+            if (document.getElementById('check-links').checked) {
+              var check_links = true;
+              var listApiEndpoint = config.api.backend + "/list-urls"
+            }
+            else{
+              var check_links = false;
+              var listApiEndpoint = config.api.backend + "/list-urls-nocheck"
+            }
             const headers = new Headers();
             headers.append("Authorization", `Bearer ${tokenResponse.accessToken}`);
-            fetch(config.api.backend + "/list-urls", {
+            fetch(listApiEndpoint, {
               method: "GET",
               headers: headers,
             })
@@ -232,22 +250,28 @@
                   document.getElementById("cardheader").classList.add("bg-warning");
                 } else {
                   document.getElementById("cardheader").classList.add("bg-success");
-                  let urls_list = JSON.parse(await response.text());
+                  if (check_links) {
+                    var urls_list = JSON.parse(await response.text());
+                  }
+                  else{
+                    urls_list = JSON.parse(await response.text()).Documents;
+                  }
                   var table_construct = "<table><tr><th>Full URL</th><th>Short URL</th><th></th></tr>";
                   var url_status = "";
                   for (var i = 0; i < urls_list.length; i++) {
-                    if (urls_list[i]["status"] === 200) {
-                      url_status = "<img src='https://img.shields.io/badge/URL%20Status-Accessible-brightgreen' style='max-width: 100%;' />";
+                    if (check_links) {
+                      if (urls_list[i]["status"] === 200) {
+                        url_status = "<img src='https://img.shields.io/badge/URL%20Status-Accessible-brightgreen' style='max-width: 100%;' />";
+                      }
+                      else {
+                        url_status = "<img src='https://img.shields.io/badge/URL%20Status-Broken-red' style='max-width: 100%;' />";
+                      }
                     }
-                    else {
-                      url_status = "<img src='https://img.shields.io/badge/URL%20Status-Broken-red' style='max-width: 100%;' />";
+                    table_construct += '<tr><td>' +  urls_list[i]["target_url"] + ' '
+                    if (check_links) {
+                      table_construct += url_status
                     }
-                    table_construct +=
-                      '<tr><td>' +
-                      urls_list[i]["target_url"] +
-                      ' ' +
-                      url_status +
-                      '</td><td>[SHORT_URL]' +
+                    table_construct += '</td><td>[SHORT_URL]' +
                       urls_list[i]["id"].trim() +
                       '<div hidden id="replace-' +
                       i +

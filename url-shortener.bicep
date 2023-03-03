@@ -16,19 +16,34 @@ param aadB2cApiClientId string
 @description('URL for shortening domain')
 param shortUrl string
 
+@description('DNS Zone for shortening domain')
+param dnsZone string
+
+@description('Resource Group of the DNS Zone')
+param dnsZoneRG string
+
+@description('GitHub URL of the static web apps repository')
+param repoURL string
+
+@description('GitHub access Token')
+@secure()
+param repoToken string
+
+@description('Suffix to add to the resources')
+param suffix string
+
 @description('Name of the resource tag.')
 param tagName object = {
   Purpose: 'url-shortener'
   Environment: Environ
 }
 
-var prefix = substring(uniqueString(resourceGroup().id), 0, 8)
-var databaseName = 'us-db-${toLower(prefix)}'
-var containerName = 'us-container-${toLower(prefix)}'
+var databaseName = 'us-db-${toLower(suffix)}'
+var containerName = 'us-container-${toLower(suffix)}'
 
 // Create CosmosDB Account
 resource dbAccount 'Microsoft.DocumentDB/databaseAccounts@2022-08-15' = {
-  name: 'us-dba-${toLower(prefix)}'
+  name: 'us-dba-${toLower(suffix)}'
   location: location
   kind: 'GlobalDocumentDB'
   properties: {
@@ -98,7 +113,7 @@ resource dbContainer 'Microsoft.DocumentDB/databaseAccounts/sqlDatabases/contain
 
 // Create Storage Account for Function App
 resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' = {
-  name: 'usstore${toLower(prefix)}'
+  name: 'usstore${toLower(suffix)}'
   location: location
   tags: tagName
   sku: {
@@ -127,70 +142,33 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' = {
   }
 }
 
-// Create Storage Account for hosting the Website
-resource URLShortenerWebsite 'Microsoft.Storage/storageAccounts@2022-05-01' = {
-  name: 'usweb${toLower(prefix)}'
+// Create Static Web Apps for hosting the Website
+resource URLShortenerWebsite 'Microsoft.Web/staticSites@2022-03-01' = {
+  name: 'us-swa-${toLower(suffix)}'
   location: location
   tags: tagName
   sku: {
-    name: 'Standard_LRS'
+    name: 'Free'
+    tier: 'Free'
   }
-  kind: 'StorageV2'
   properties: {
-    accessTier: 'Hot'
-    allowBlobPublicAccess: true
-    allowCrossTenantReplication: true
-    minimumTlsVersion: 'TLS1_2'
-    supportsHttpsTrafficOnly: true
-    networkAcls:{
-      defaultAction: 'Deny'
-      bypass: 'AzureServices, Logging, Metrics'
-    }
-    encryption: {
-      services: {
-        file: {
-          keyType: 'Account'
-          enabled: true
-        }
-        blob: {
-          keyType: 'Account'
-          enabled: true
-        }
-      }
-      keySource: 'Microsoft.Storage'
-    }
-  }
-}
-
-// Create Blob Service for Website Storage Account
-resource URLShortenerWebsiteBlobService 'Microsoft.Storage/storageAccounts/blobServices@2022-05-01' = {
-  name: 'default'
-  parent: URLShortenerWebsite
-  properties: {
-    deleteRetentionPolicy: {
-      days: 7
-      enabled: true
-      allowPermanentDelete: false
-    }
-  }
-}
-
-// Create Blob Container for Website Storage Account
-resource URLShortenerWebsiteBlobContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2022-05-01' = {
-  name: 'url-shortener'
-  parent: URLShortenerWebsiteBlobService
-  properties: {
-    publicAccess: 'Blob'
+    allowConfigFileUpdates: true
+    branch: 'main'
+    enterpriseGradeCdnStatus: 'Disabled'
+    provider: 'GitHub'
+    repositoryToken: repoToken
+    repositoryUrl: repoURL
+    stagingEnvironmentPolicy: 'Disabled'
   }
 }
 
 // Create Front Door CDN Profile
 resource URLShortenerCdnProfile 'Microsoft.Cdn/profiles@2022-05-01-preview' = {
-  name: 'us-cdn-${toLower(prefix)}'
+  name: 'us-cdn-${toLower(suffix)}'
   location: 'global'
   tags: tagName
   sku: {
-    name: 'Premium_AzureFrontDoor'
+    name: 'Standard_AzureFrontDoor'
   }
   properties: {
     extendedProperties: {}
@@ -200,7 +178,7 @@ resource URLShortenerCdnProfile 'Microsoft.Cdn/profiles@2022-05-01-preview' = {
 
 // Create Front Door CDN Endpoint
 resource URLShortenerCdnEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2022-05-01-preview' = {
-  name: 'us-cdn-ep-${toLower(prefix)}'
+  name: 'us-cdn-ep-${toLower(suffix)}'
   location: 'global'
   tags: tagName
   parent: URLShortenerCdnProfile
@@ -211,12 +189,12 @@ resource URLShortenerCdnEndpoint 'Microsoft.Cdn/profiles/afdEndpoints@2022-05-01
 
 // Create Front Door Web Origin Group
 resource URLShortenerWebOriginGroup 'Microsoft.Cdn/profiles/originGroups@2022-05-01-preview' = {
-  name: 'us-web-og-${toLower(prefix)}'
+  name: 'us-web-og-${toLower(suffix)}'
   parent: URLShortenerCdnProfile
   properties: {
     healthProbeSettings: {
       probeIntervalInSeconds: 100
-      probePath: '/url-shortener/index.html'
+      probePath: '/'
       probeProtocol: 'Https'
       probeRequestType: 'HEAD'
     }
@@ -231,29 +209,21 @@ resource URLShortenerWebOriginGroup 'Microsoft.Cdn/profiles/originGroups@2022-05
 
 // Create Front Door Web Origin
 resource URLShortenerWebOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2022-05-01-preview' = {
-  name: 'us-web-origin-${toLower(prefix)}'
+  name: 'us-web-origin-${toLower(suffix)}'
   parent: URLShortenerWebOriginGroup
   properties: {
     httpPort: 80
     httpsPort: 443
-    hostName: 'usweb${toLower(prefix)}.blob.${environment().suffixes.storage}'
-    originHostHeader: 'usweb${toLower(prefix)}.blob.${environment().suffixes.storage}'
+    hostName: URLShortenerWebsite.properties.defaultHostname
+    originHostHeader: URLShortenerWebsite.properties.defaultHostname
     priority: 1
     weight: 1000
-    sharedPrivateLinkResource: {
-      groupId: 'blob'
-      privateLink: {
-        id: URLShortenerWebsite.id
-      }
-      privateLinkLocation: location
-      requestMessage: 'Enable Private Link for URL Shortener Origin'
-    }
   }
 }
 
 // Create Front Door API Origin Group
 resource URLShortenerApiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2022-05-01-preview' = {
-  name: 'us-api-og-${toLower(prefix)}'
+  name: 'us-api-og-${toLower(suffix)}'
   parent: URLShortenerCdnProfile
   properties: {
     loadBalancingSettings: {
@@ -267,7 +237,7 @@ resource URLShortenerApiOriginGroup 'Microsoft.Cdn/profiles/originGroups@2022-05
 
 // Create Front Door API Origin
 resource URLShortenerApiOrigin 'Microsoft.Cdn/profiles/originGroups/origins@2022-05-01-preview' = {
-  name: 'us-api-origin-${toLower(prefix)}'
+  name: 'us-api-origin-${toLower(suffix)}'
   parent: URLShortenerApiOriginGroup
   properties: {
     httpPort: 80
@@ -325,45 +295,7 @@ resource URLShortenerAPIRule 'Microsoft.Cdn/profiles/ruleSets/rules@2022-11-01-p
   }
 }
 
-// Create Front Door Rule for Management Interface
-resource URLShortenerMgmtRule 'Microsoft.Cdn/profiles/ruleSets/rules@2022-11-01-preview' = {
-  name: 'ManagementRule'
-  parent: URLShortenerRuleSet
-  dependsOn: [ URLShortenerWebOrigin ]
-  properties: {
-    matchProcessingBehavior: 'Stop'
-    actions: [
-      {
-        name: 'RouteConfigurationOverride'
-        parameters: {
-          originGroupOverride: {
-            forwardingProtocol: 'HttpsOnly'
-            originGroup: {
-              id: URLShortenerWebOriginGroup.id
-            }
-          }
-          typeName: 'DeliveryRuleRouteConfigurationOverrideActionParameters'
-        }
-      }
-    ]
-    conditions: [
-      {
-        name: 'UrlPath'
-        parameters: {
-          matchValues: [
-            'url-shortener/index.html'
-          ]
-          operator: 'Equal'
-          negateCondition: false
-          typeName: 'DeliveryRuleUrlPathMatchConditionParameters'
-        }
-      }
-    ]
-    order: 1
-  }
-}
-
-// Create Front Door Rule for Management Interface
+// Create Front Door Rule for Redirect
 resource URLShortenerRedirectRule 'Microsoft.Cdn/profiles/ruleSets/rules@2022-11-01-preview' = {
   name: 'RedirectRule'
   parent: URLShortenerRuleSet
@@ -397,7 +329,7 @@ resource URLShortenerRedirectRule 'Microsoft.Cdn/profiles/ruleSets/rules@2022-11
         }
       }
     ]
-    order: 2
+    order: 1
   }
 }
 
@@ -405,30 +337,33 @@ resource URLShortenerRedirectRule 'Microsoft.Cdn/profiles/ruleSets/rules@2022-11
 resource URLShortenerDefaultRule 'Microsoft.Cdn/profiles/ruleSets/rules@2022-11-01-preview' = {
   name: 'DefaultRule'
   parent: URLShortenerRuleSet
+  dependsOn: [ URLShortenerWebOrigin ]
   properties: {
     matchProcessingBehavior: 'Continue'
     actions: [
       {
-        name: 'UrlRedirect'
+        name: 'RouteConfigurationOverride'
         parameters: {
-          customPath: '/url-shortener/index.html'
-          destinationProtocol: 'Https'
-          redirectType: 'PermanentRedirect'
-          typeName: 'DeliveryRuleUrlRedirectActionParameters'
+          originGroupOverride: {
+            forwardingProtocol: 'HttpsOnly'
+            originGroup: {
+              id: URLShortenerWebOriginGroup.id
+            }
+          }
+          typeName: 'DeliveryRuleRouteConfigurationOverrideActionParameters'
         }
       }
     ]
-    order: 3
+    order: 2
   }
 }
 
 // Create Front Door CDN Route
 resource URLShortenerAfdRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2022-05-01-preview' = {
-  name: 'us-cdn-route-${toLower(prefix)}'
+  name: 'us-cdn-route-${toLower(suffix)}'
   parent: URLShortenerCdnEndpoint
   dependsOn: [ 
     URLShortenerAPIRule
-    URLShortenerMgmtRule
     URLShortenerRedirectRule
     URLShortenerDefaultRule
   ]
@@ -436,6 +371,11 @@ resource URLShortenerAfdRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2022-0
     enabledState: 'Enabled'
     forwardingProtocol: 'HttpsOnly'
     httpsRedirect: 'Enabled'
+    customDomains: [
+      {
+        id: URLShortenerCustomDomain.id
+      }
+    ]
     patternsToMatch: [
       '/*'
     ]
@@ -454,9 +394,42 @@ resource URLShortenerAfdRoute 'Microsoft.Cdn/profiles/afdEndpoints/routes@2022-0
   }
 }
 
+// Obtain existing DNS Zone [Optional]
+resource existingDnsZone 'Microsoft.Network/dnszones@2018-05-01' existing = if (dnsZone != 'DoNotUse') {
+  name: dnsZone
+  scope: resourceGroup(dnsZoneRG)
+}
+
+// Create Front Door custom domain [Optional]
+resource URLShortenerCustomDomain 'Microsoft.Cdn/profiles/customDomains@2022-05-01-preview' = if (dnsZone != 'DoNotUse') {
+  name: 'us-cdn-cd-${toLower(suffix)}'
+  parent: URLShortenerCdnProfile
+  properties: {
+    azureDnsZone: {
+      id: existingDnsZone.id
+    }
+    hostName: dnsZone
+    tlsSettings: {
+      certificateType: 'ManagedCertificate'
+      minimumTlsVersion: 'TLS12'
+    }
+  }
+}
+
+// Create the Front Door DNS records using module [Optional]
+module dnsRecords './dns-records.bicep' = if (dnsZone != 'DoNotUse') {
+  name: 'frontdoor-dns-records'
+  scope: resourceGroup(dnsZoneRG)    // Deployed in the scope of DNS Zone resource group
+  params: {
+    dnsZone: dnsZone
+    validationToken: URLShortenerCustomDomain.properties.validationProperties.validationToken
+    cdnEndpointId: URLShortenerCdnEndpoint.id
+  }
+}
+
 // Create App Service Plan
 resource serverFarm 'Microsoft.Web/serverfarms@2022-03-01' = {
-  name: 'us-asp-${toLower(prefix)}'
+  name: 'us-asp-${toLower(suffix)}'
   location: location
   tags: tagName
   sku: {
@@ -471,7 +444,7 @@ resource serverFarm 'Microsoft.Web/serverfarms@2022-03-01' = {
 
 // Create Log Analytics Workspace
 resource logAnalyticsWksp 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: 'us-law-${toLower(prefix)}'
+  name: 'us-law-${toLower(suffix)}'
   location: location
   tags: tagName
   properties: {
@@ -492,7 +465,7 @@ resource logAnalyticsWksp 'Microsoft.OperationalInsights/workspaces@2022-10-01' 
 
 // Create App Insights
 resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
-  name: 'us-ai-${toLower(prefix)}'
+  name: 'us-ai-${toLower(suffix)}'
   location: location
   tags: tagName
   kind: 'web'
@@ -510,7 +483,7 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
 
 // Create Function App
 resource URLShortenerFunctionApp 'Microsoft.Web/sites@2022-03-01' = {
-  name: 'us-fa-${toLower(prefix)}'
+  name: 'us-fa-${toLower(suffix)}'
   location: location
   kind: 'functionapp,linux'
   tags: tagName
@@ -590,7 +563,7 @@ resource dbRoleAssignment 'Microsoft.DocumentDB/databaseAccounts/sqlRoleAssignme
 
 // Create API Management
 resource URLShortenerApiMgmt 'Microsoft.ApiManagement/service@2021-12-01-preview' = {
-  name: 'us-apim-${toLower(prefix)}'
+  name: 'us-apim-${toLower(suffix)}'
   location: location
   tags: tagName
   sku: {
@@ -604,7 +577,7 @@ resource URLShortenerApiMgmt 'Microsoft.ApiManagement/service@2021-12-01-preview
     hostnameConfigurations: [
       {
         type: 'Proxy'
-        hostName: 'us-apim-${toLower(prefix)}.azure-api.net'
+        hostName: 'us-apim-${toLower(suffix)}.azure-api.net'
         negotiateClientCertificate: false
         defaultSslBinding: true
         certificateSource: 'BuiltIn'
@@ -642,10 +615,10 @@ var defaultHostKey = listkeys('${URLShortenerFunctionApp.id}/host/default', '202
 
 // Create API Management Named Value to store Function Key
 resource apiNamedValue 'Microsoft.ApiManagement/service/namedValues@2021-12-01-preview' = {
-  name: 'us-func-key-${toLower(prefix)}'
+  name: 'us-func-key-${toLower(suffix)}'
   parent: URLShortenerApiMgmt
   properties: {
-    displayName: 'us-function-key-${toLower(prefix)}'
+    displayName: 'us-function-key-${toLower(suffix)}'
     secret: true
     tags: [
       'URLShortener'
@@ -657,7 +630,7 @@ resource apiNamedValue 'Microsoft.ApiManagement/service/namedValues@2021-12-01-p
 
 // Create API Management Backend pointing to Function App
 resource apiBackend 'Microsoft.ApiManagement/service/backends@2021-12-01-preview' = { 
-  name: 'us-backend-${toLower(prefix)}'
+  name: 'us-backend-${toLower(suffix)}'
   parent: URLShortenerApiMgmt
   properties: {
     credentials: {
@@ -679,7 +652,7 @@ resource apiBackend 'Microsoft.ApiManagement/service/backends@2021-12-01-preview
 
 // Create API Management API
 resource URLShortenerApi 'Microsoft.ApiManagement/service/apis@2021-12-01-preview' = {
-  name: 'us-api-${toLower(prefix)}'
+  name: 'us-api-${toLower(suffix)}'
   parent: URLShortenerApiMgmt
   properties: {
     apiType: 'http'
@@ -702,7 +675,7 @@ resource URLShortenerApi 'Microsoft.ApiManagement/service/apis@2021-12-01-previe
 
 // Configure Logging for API Management
 resource URLShortenerApiLogger 'Microsoft.ApiManagement/service/loggers@2021-12-01-preview' = {
-  name: 'us-api-log-${toLower(prefix)}'
+  name: 'us-api-log-${toLower(suffix)}'
   parent: URLShortenerApiMgmt
   properties: {
     description: 'Log URLShortener API on Application Insights'
@@ -717,7 +690,7 @@ resource URLShortenerApiLogger 'Microsoft.ApiManagement/service/loggers@2021-12-
 
 // Create API Management Product
 resource URLShortenerApiProduct 'Microsoft.ApiManagement/service/products@2021-12-01-preview' = {
-  name: 'us-product-${toLower(prefix)}'
+  name: 'us-product-${toLower(suffix)}'
   parent: URLShortenerApiMgmt
   properties: {
     displayName: 'URLShortener'
@@ -734,7 +707,7 @@ resource URLShortenerApiProductMap 'Microsoft.ApiManagement/service/products/api
 
 // Create API Management Subscription
 resource URLShortenerApiSubscription 'Microsoft.ApiManagement/service/subscriptions@2021-12-01-preview' = {
-  name: 'us-api-sub-${toLower(prefix)}'
+  name: 'us-api-sub-${toLower(suffix)}'
   parent: URLShortenerApiMgmt
   properties: {
     scope: '/apis/${URLShortenerApi.id}'
@@ -769,6 +742,35 @@ resource URLShortenerApiGetURLIdPolicy 'Microsoft.ApiManagement/service/apis/ope
   name: 'policy'
   properties: {
     value: '<policies>\r\n    <inbound>\r\n        <base />\r\n        <check-header name="X-Azure-FDID" failed-check-httpcode="403" failed-check-error-message="Not Authorized" ignore-case="true">\r\n            <value>${URLShortenerCdnProfile.properties.frontDoorId}</value>\r\n        </check-header>\r\n        <set-backend-service base-url="https://${dbAccount.name}.documents.azure.com" />\r\n        <set-variable name="requestDateString" value="@(DateTime.UtcNow.ToString("r"))" />\r\n        <authentication-managed-identity resource="https://${dbAccount.name}.documents.azure.com" output-token-variable-name="msi-access-token" ignore-error="false" />\r\n        <set-header name="Authorization" exists-action="override">\r\n            <value>@("type=aad&ver=1.0&sig=" + context.Variables["msi-access-token"])</value>\r\n        </set-header>\r\n        <set-header name="x-ms-date" exists-action="override">\r\n            <value>@(context.Variables.GetValueOrDefault<string>("requestDateString"))</value>\r\n        </set-header>\r\n        <set-header name="x-ms-version" exists-action="override">\r\n            <value>2018-12-31</value>\r\n        </set-header>\r\n        <set-header name="x-ms-documentdb-partitionkey" exists-action="override">\r\n            <value>@{string str = "[ \\"" + context.Request.OriginalUrl.Path.Trim(\'/\') + "\\" ]\'";return str;}</value>\r\n        </set-header>\r\n        <rewrite-uri template="/dbs/${database.name}/colls/${dbContainer.name}/docs/{id}" copy-unmatched-params="false" />\r\n    </inbound>\r\n    <backend>\r\n        <base />\r\n    </backend>\r\n    <outbound>\r\n        <base />\r\n        <return-response>\r\n            <set-status code="302" reason="Found" />\r\n            <set-header name="Location" exists-action="override">\r\n                <value>@{var res_json = context.Response.Body.As<JObject>(preserveContent: true);return res_json["target_url"].ToString();}</value>\r\n            </set-header>\r\n        </return-response>\r\n    </outbound>\r\n    <on-error>\r\n        <base />\r\n    </on-error>\r\n</policies>\r\n'
+    format: 'rawxml'
+  }
+}
+
+// Create API to HEAD the long URL for the provided short URL ID
+resource URLShortenerApiHeadURLId 'Microsoft.ApiManagement/service/apis/operations@2021-12-01-preview' = {
+  name: 'head-url-by-id'
+  parent: URLShortenerApi
+  properties: {
+    description: 'API to get the long URL for the provided short URL for HEAD request'
+    displayName: 'HEAD URL by Id'
+    method: 'HEAD'
+    templateParameters: [
+      {
+        name: 'id'
+        required: true
+        type: 'string'
+      }
+    ]
+    urlTemplate: '/{id}'
+  }
+}
+
+// Create API Policy for GET URL by ID
+resource URLShortenerApiHeadURLIdPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2021-12-01-preview' = {
+  parent: URLShortenerApiHeadURLId
+  name: 'policy'
+  properties: {
+    value: '<policies>\r\n    <inbound>\r\n        <base />\r\n        <check-header name="X-Azure-FDID" failed-check-httpcode="403" failed-check-error-message="Not Authorized" ignore-case="true">\r\n            <value>${URLShortenerCdnProfile.properties.frontDoorId}</value>\r\n        </check-header>\r\n        <set-backend-service base-url="https://${dbAccount.name}.documents.azure.com" />\r\n        <set-variable name="requestDateString" value="@(DateTime.UtcNow.ToString("r"))" />\r\n        <authentication-managed-identity resource="https://${dbAccount.name}.documents.azure.com" output-token-variable-name="msi-access-token" ignore-error="false" />\r\n        <set-header name="Authorization" exists-action="override">\r\n            <value>@("type=aad&ver=1.0&sig=" + context.Variables["msi-access-token"])</value>\r\n        </set-header>\r\n        <set-header name="x-ms-date" exists-action="override">\r\n            <value>@(context.Variables.GetValueOrDefault<string>("requestDateString"))</value>\r\n        </set-header>\r\n        <set-header name="x-ms-version" exists-action="override">\r\n            <value>2018-12-31</value>\r\n        </set-header>\r\n        <set-header name="x-ms-documentdb-partitionkey" exists-action="override">\r\n            <value>@{string str = "[ \\"" + context.Request.OriginalUrl.Path.Trim(\'/\') + "\\" ]\'";return str;}</value>\r\n        </set-header>\r\n        <set-method>GET</set-method>\r\n        <rewrite-uri template="/dbs/${database.name}/colls/${dbContainer.name}/docs/{id}" copy-unmatched-params="false" />\r\n    </inbound>\r\n    <backend>\r\n        <base />\r\n    </backend>\r\n    <outbound>\r\n        <base />\r\n        <return-response>\r\n            <set-status code="200" reason="Ok" />\r\n            <set-header name="Location" exists-action="override">\r\n                <value>@{var res_json = context.Response.Body.As<JObject>(preserveContent: true);return res_json["target_url"].ToString();}</value>\r\n            </set-header>\r\n        </return-response>\r\n    </outbound>\r\n    <on-error>\r\n        <base />\r\n    </on-error>\r\n</policies>\r\n'
     format: 'rawxml'
   }
 }
@@ -811,7 +813,7 @@ resource URLShortenerApiGetListURLs 'Microsoft.ApiManagement/service/apis/operat
     method: 'GET'
     responses: [
       {
-        description: 'List of URLS specific to this User'
+        description: 'List of URLs specific to this User'
         statusCode: 200
       }
     ]
@@ -825,6 +827,34 @@ resource URLShortenerApiGetListURLsPolicy 'Microsoft.ApiManagement/service/apis/
   name: 'policy'
   properties: {
     value: '<policies>\r\n    <inbound>\r\n        <base />\r\n        <cors allow-credentials="true">\r\n            <allowed-origins>\r\n                <origin>https://${URLShortenerCdnEndpoint.properties.hostName}</origin>\r\n                <origin>${URLShortenerApiMgmt.properties.gatewayUrl}</origin>\r\n                            <origin>${shortUrl}</origin>\r\n            </allowed-origins>\r\n            <allowed-methods preflight-result-max-age="120">\r\n                <method>GET</method>\r\n                <method>OPTIONS</method>\r\n            </allowed-methods>\r\n            <allowed-headers>\r\n                <header>*</header>\r\n            </allowed-headers>\r\n            <expose-headers>\r\n                <header>*</header>\r\n            </expose-headers>\r\n        </cors>\r\n        <check-header name="X-Azure-FDID" failed-check-httpcode="403" failed-check-error-message="Not Authorized" ignore-case="true">\r\n            <value>${URLShortenerCdnProfile.properties.frontDoorId}</value>\r\n        </check-header>\r\n        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid." require-expiration-time="true" require-scheme="Bearer" require-signed-tokens="true" clock-skew="300" output-token-variable-name="jwt-token">\r\n            <openid-config url="https://${aadB2cOrg}.b2clogin.com/${aadB2cOrg}.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=${aadB2cUserFlow}" />\r\n            <required-claims>\r\n                <claim name="aud">\r\n                    <value>${aadB2cApiClientId}</value>\r\n                </claim>\r\n            </required-claims>\r\n        </validate-jwt>\r\n        <set-variable name="userID" value="@{\r\n            var authHeader = context.Request.Headers.GetValueOrDefault("Authorization", "");\r\n            return (string)authHeader.AsJwt()?.Claims.GetValueOrDefault("oid", "DOESNOT_EXIST");\r\n        }" />\r\n        <set-header name="Content-Type" exists-action="override">\r\n            <value>application/json</value>\r\n        </set-header>\r\n        <set-method>POST</set-method>\r\n        <set-body template="liquid">{"oid": "{{context.Variables["userID"]}}"}</set-body>\r\n        <set-backend-service id="apim-generated-policy" backend-id="${apiBackend.name}" />\r\n        <rewrite-uri template="/api/list-urls" />\r\n    </inbound>\r\n    <backend>\r\n        <base />\r\n    </backend>\r\n    <outbound>\r\n        <base />\r\n    </outbound>\r\n    <on-error>\r\n        <base />\r\n    </on-error>\r\n</policies>\r\n'
+    format: 'rawxml'
+  }
+}
+
+// Create API to GET the list of URLs without check for a specific User
+resource URLShortenerApiGetNoCheckListURLs 'Microsoft.ApiManagement/service/apis/operations@2021-12-01-preview' = {
+  name: 'list-urls-nocheck'
+  parent: URLShortenerApi
+  properties: {
+    description: 'API to get the list of URLS for that specific User without check'
+    displayName: 'List URLs Without Check'
+    method: 'GET'
+    responses: [
+      {
+        description: 'List of URLs specific to this User without check'
+        statusCode: 200
+      }
+    ]
+    urlTemplate: '/api/list-urls-nocheck'
+  }
+}
+
+// Create API Policy for GET List URLs
+resource URLShortenerApiGetNoCheckListURLsPolicy 'Microsoft.ApiManagement/service/apis/operations/policies@2021-12-01-preview' = {
+  parent: URLShortenerApiGetNoCheckListURLs
+  name: 'policy'
+  properties: {
+    value: '<policies>\r\n    <inbound>\r\n        <base />\r\n        <cors allow-credentials="true">\r\n            <allowed-origins>\r\n                <origin>https://${URLShortenerCdnEndpoint.properties.hostName}</origin>\r\n                <origin>${URLShortenerApiMgmt.properties.gatewayUrl}</origin>\r\n                            <origin>${shortUrl}</origin>\r\n            </allowed-origins>\r\n            <allowed-methods preflight-result-max-age="120">\r\n                <method>GET</method>\r\n                <method>OPTIONS</method>\r\n            </allowed-methods>\r\n            <allowed-headers>\r\n                <header>*</header>\r\n            </allowed-headers>\r\n            <expose-headers>\r\n                <header>*</header>\r\n            </expose-headers>\r\n        </cors>\r\n        <check-header name="X-Azure-FDID" failed-check-httpcode="403" failed-check-error-message="Not Authorized" ignore-case="true">\r\n            <value>${URLShortenerCdnProfile.properties.frontDoorId}</value>\r\n        </check-header>\r\n        <validate-jwt header-name="Authorization" failed-validation-httpcode="401" failed-validation-error-message="Unauthorized. Access token is missing or invalid." require-expiration-time="true" require-scheme="Bearer" require-signed-tokens="true" clock-skew="300" output-token-variable-name="jwt-token">\r\n            <openid-config url="https://${aadB2cOrg}.b2clogin.com/${aadB2cOrg}.onmicrosoft.com/v2.0/.well-known/openid-configuration?p=${aadB2cUserFlow}" />\r\n            <required-claims>\r\n                <claim name="aud">\r\n                    <value>${aadB2cApiClientId}</value>\r\n                </claim>\r\n            </required-claims>\r\n        </validate-jwt>\r\n        <set-variable name="userID" value="@{\r\n            var authHeader = context.Request.Headers.GetValueOrDefault("Authorization", "");\r\n            return (string)authHeader.AsJwt()?.Claims.GetValueOrDefault("oid", "DOESNOT_EXIST");\r\n        }" />\r\n        <set-header name="Content-Type" exists-action="override">\r\n            <value>application/query+json</value>\r\n        </set-header>\r\n        <set-method>POST</set-method>\r\n        <set-backend-service base-url="https://${dbAccount.name}.documents.azure.com" />\r\n        <set-variable name="requestDateString" value="@(DateTime.UtcNow.ToString("r"))" />\r\n        <authentication-managed-identity resource="https://${dbAccount.name}.documents.azure.com" output-token-variable-name="msi-access-token" ignore-error="false" />\r\n        <set-header name="Authorization" exists-action="override">\r\n            <value>@("type=aad&ver=1.0&sig=" + context.Variables["msi-access-token"])</value>\r\n        </set-header>\r\n        <set-header name="x-ms-date" exists-action="override">\r\n            <value>@(context.Variables.GetValueOrDefault<string>("requestDateString"))</value>\r\n        </set-header>\r\n        <set-header name="x-ms-version" exists-action="override">\r\n            <value>2018-12-31</value>\r\n        </set-header>\r\n        <set-header name="x-ms-documentdb-isquery" exists-action="override">\r\n            <value>True</value>\r\n        </set-header>\r\n        <set-header name="x-ms-documentdb-query-enablecrosspartition" exists-action="override">\r\n            <value>True</value>\r\n        </set-header>\r\n        <set-body template="liquid">\r\n        {\r\n            "query": "SELECT c.id, c.target_url FROM c WHERE (c.oid = \'{{context.Variables["userID"]}}\')",\r\n            "parameters": []}\r\n        </set-body>\r\n        <rewrite-uri template="/dbs/${database.name}/colls/${dbContainer.name}/docs/" />\r\n    </inbound>\r\n    <backend>\r\n        <base />\r\n    </backend>\r\n    <outbound>\r\n        <base />\r\n    </outbound>\r\n    <on-error>\r\n        <base />\r\n    </on-error>\r\n</policies>\r\n'
     format: 'rawxml'
   }
 }
@@ -916,7 +946,6 @@ resource URLShortenerServiceApiDiagnostics 'Microsoft.ApiManagement/service/apis
 }
 
 // Output the required information
-output applicationURL string = 'https://${URLShortenerCdnEndpoint.properties.hostName}'
-output apiEndpoint string = URLShortenerApiMgmt.properties.gatewayUrl
-output storageAccount string = URLShortenerWebsite.name
+output FrontDoorEndpoint string = 'https://${URLShortenerCdnEndpoint.properties.hostName}'
+output ApiMgmtEndpoint string = URLShortenerApiMgmt.properties.gatewayUrl
 output functionApp string = URLShortenerFunctionApp.name

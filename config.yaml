@@ -21,10 +21,16 @@ aadB2cApiClientId: bexample-abcd-1234-pqrs-examplef9a45
 aadB2cSpaClientId: fexample-abcd-1234-pqrs-example6cd6a
 
 # URL that should be used for shorterning
-shortUrl: https://az.pprakash.me/
+shortUrl: https://suru.ku/
 
 # Write scope for API
 writeScope: https://suruku.onmicrosoft.com/shorten-url/API.Write
 
 # Read scope for API
 readScope: https://suruku.onmicrosoft.com/shorten-url/API.Read
+
+# [OPTIONAL] DNS Zone Name in Azure DNS Zones
+# dnsZone: suru.ku
+
+# [OPTIONAL] Resource Group Name where Azure DNS Zone is created
+# dnsZoneRG: Suruku-DNS-RG

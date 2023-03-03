@@ -5,6 +5,7 @@ This is an example implementation of URL Shortener using Serverless technologies
 ## Prerequisites
 
 * Active Azure Subscription
+* GitHub account and Personal Access Token (PAT) with scope to create repository, create actions, and create secrets. [Learn more](https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token)
 * Azure AD permissions to create RBAC Role, CosmosDB, API Managment, Azure functions, Storage Account, Azure Front Door, and other dependent services
 * Ability to login to Azure using browser
 * Latest version of [Azure CLI](https://learn.microsoft.com/en-us/cli/azure/install-azure-cli) and [Azure Function Core Tools](https://learn.microsoft.com/en-us/azure/azure-functions/functions-run-local) installed
@@ -20,8 +21,10 @@ This is an example implementation of URL Shortener using Serverless technologies
 * `deploy.py` - Deployment script which will deploy this solution in your Azure Subscription
 * `url-shortener.bicep` - Bicep template which creates required infrastructure in Azure
 * `main.bicep` - Main Bicep template which creates a new Resource Group and create the resources from the `url-shortener` module
+* `dns-records.bicep` - Bicep template which creates DNS records in Azure DNS
 * `function_code` - Azure Functions source code to create short URL
-* `index-template.html` - HTML template for the Single Page Application (SPA) which will be updated with appropriate values deployed by Bicep
+* `frontend/index-template.html` - HTML template for the Single Page Application (SPA) which will be updated with appropriate values deployed by Bicep
+* `frontend/link-checker-template.html` - HTML template for the Link Checker page which will be updated with appropriate values deployed by Bicep
 
 ## Configuration
 
@@ -39,6 +42,8 @@ You need to update the config.yaml with appropriate values for the deployment sc
 |**shortUrl**|URL that should be used for shorterning (Include `https://` and the training slash`/`)|`https://suru.ku/`|
 |**writeScope**|Write scope for API in Azure AD B2C|`https://suruku.onmicrosoft.com/shorten-url/API.Write`|
 |**readScope**|Read scope for API in Azure AD B2C|`https://suruku.onmicrosoft.com/shorten-url/API.Read`|
+|**dnsZone**|Azure DNS Zone Name *Optional*|`suru.ku`|
+|**dnsZoneRG**|Azure DNS Zone Resource Group Name *Optional*|`Suruku-DNS-RG`|
 
 ## Deployment
 
@@ -50,4 +55,4 @@ After updating the `config.yaml` run the following command to deploy the solutio
 python deploy.py
 ```
 
-Review the prompts and confirm the subscription ID to start the deployment. Once the deployment has been completed you should add the following URI  ([Your Short URL]/url-shortener/index.html - e.g. `https://suru.ku/url-shortener/index.html`) in redirect URI section of SPA app client registration in your Azure AD B2C tenant. In case if you don't have a domain and just want to test the solution you can use the Azure Front Door endpoint URL in the redirect URI (e.g. `https://us-cdn-ep-example-babcdbdxyzb1234q.z01.azurefd.net/url-shortener/index.html`). Front Door endpoint URL will be printed after the successful deployment of the above script.
+Review the prompts and confirm the subscription ID to start the deployment. Once the deployment has been completed you should add the following URI  ([Your Short URL]/url-shortener/index.html - e.g. `https://suru.ku/`) in redirect URI section of SPA app client registration in your Azure AD B2C tenant. In case if you don't have a domain and just want to test the solution you can use the Azure Front Door endpoint URL in the redirect URI (e.g. `https://us-cdn-ep-example-babcdbdxyzb1234q.z01.azurefd.net/`). Front Door endpoint URL will be printed after the successful deployment of the above script.

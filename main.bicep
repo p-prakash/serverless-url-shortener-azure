@@ -25,6 +25,24 @@ param aadB2cApiClientId string
 @minLength(7)
 param shortUrl string
 
+@description('DNS Zone for shortening domain')
+param dnsZone string = 'DoNotUse'
+
+@description('Resource Group of the DNS Zone')
+param dnsZoneRG string = 'DoNotUse'
+
+@description('GitHub URL of the static web apps repository')
+param repoURL string
+
+@description('GitHub access Token')
+@secure()
+param repoToken string
+
+@description('Suffix to add to the resources')
+@minLength(8)
+@maxLength(8)
+param suffix string
+
 // Create the resource group
 resource rg 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: 'url-shortener-rg'
@@ -46,11 +64,12 @@ module shorten './url-shortener.bicep' = {
     aadB2cUserFlow: aadB2cUserFlow
     aadB2cApiClientId: aadB2cApiClientId
     shortUrl: shortUrl
+    repoToken: repoToken
+    repoURL: repoURL
+    suffix: suffix
+    dnsZone: dnsZone
+    dnsZoneRG: dnsZoneRG
   }
 }
 
-output applicationURL string = shorten.outputs.applicationURL
-output apiEndpoint string = shorten.outputs.apiEndpoint
-output storageAccount string = shorten.outputs.storageAccount
-output resourceGroup string = rg.name
 output functionApp string = shorten.outputs.functionApp
