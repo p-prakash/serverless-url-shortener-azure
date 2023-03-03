@@ -86,7 +86,7 @@ else:
     print('Creating GitHub repository...')
     REPO_NAME = f'url-shortener-{SUFFIX}'
     gh = Github(gh_access_token)
-    repo = gh.get_user().create_repo(REPO_NAME)
+    repo = gh.get_user().create_repo(REPO_NAME, description='URL Shortenere SWA Repo', private=True)
     print(f'{OKGREEN}Created the GitHub repository - {repo.full_name}{ENDC}')
 
     # Checking whether logged in to Azure CLI

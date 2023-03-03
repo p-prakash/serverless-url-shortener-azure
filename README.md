@@ -42,8 +42,8 @@ You need to update the config.yaml with appropriate values for the deployment sc
 |**shortUrl**|URL that should be used for shorterning (Include `https://` and the training slash`/`)|`https://suru.ku/`|
 |**writeScope**|Write scope for API in Azure AD B2C|`https://suruku.onmicrosoft.com/shorten-url/API.Write`|
 |**readScope**|Read scope for API in Azure AD B2C|`https://suruku.onmicrosoft.com/shorten-url/API.Read`|
-|**dnsZone**|Azure DNS Zone Name *Optional*|`suru.ku`|
-|**dnsZoneRG**|Azure DNS Zone Resource Group Name *Optional*|`Suruku-DNS-RG`|
+|**dnsZone**|Azure DNS Zone Name [*Optional*]|`suru.ku`|
+|**dnsZoneRG**|Azure DNS Zone Resource Group Name [*Optional*]|`Suruku-DNS-RG`|
 
 ## Deployment
 
